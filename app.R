@@ -21,25 +21,8 @@ cl <- makeCluster(no_cores)
 registerDoParallel(cl)
 
 player_id_list <- read_csv("playerid_list.csv")
-
-ids18 <- search_gids(team = "twins", start = "2018-03-28", end = "2018-04-30")
-ids19 <- make_gids(start = "2019-03-28", end = "2019-04-30") %>%
-  str_subset("minmlb") %>%
-  str_sub(66, 95)
-
-batdat18 <- get_payload(game_ids = ids18, dataset = "inning_hit")
-batdat19 <- get_payload(game_ids = ids19, dataset = "inning_hit")
-gamedat18 <- get_payload(game_ids = ids18)
-gamedat19 <- get_payload(game_ids = ids19)
-
-
-pitches18 <- inner_join(gamedat18$pitch, gamedat18$atbat, by = c("num", "url")) %>%
-  subset(pitcher_name == "Kyle Gibson" | pitcher_name == "Jake Odorizzi" | pitcher_name == "Jose Berrios") %>%
-  mutate(year = "2018")
-pitches19 <- inner_join(gamedat19$pitch, gamedat19$atbat, by = c("num", "url")) %>%
-  subset(pitcher_name == "Kyle Gibson" | pitcher_name == "Jake Odorizzi" | pitcher_name == "Jose Berrios") %>%
-  mutate(year = "2019")
-pitches <- merge(pitches18, pitches19, all =TRUE)
+pitches <- read_csv("pitchingOutput.csv")
+batting <- read_csv("battingOutput.csv")
 
 pitchTypes <- pitches %>%
   group_by(pitcher_name, year) %>%
@@ -49,22 +32,6 @@ pitchResult <- pitches %>%
   group_by(pitcher_name, year) %>%
   count(type) %>%
   drop_na()
-
-
-bat18 <- batdat18 %>%
-  rename(MLBCODE = batter) %>%
-  inner_join(player_id_list, by = "MLBCODE") %>%
-  mutate(batter_name = paste0(FIRSTNAME, " ", LASTNAME)) %>%
-  subset(batter_name == "Eddie Rosario" | batter_name == "Max Kepler") %>%
-  mutate(year = "2018")
-bat19 <- batdat19 %>%
-  rename(MLBCODE = batter) %>%
-  inner_join(player_id_list, by = "MLBCODE") %>%
-  mutate(batter_name = paste0(FIRSTNAME, " ", LASTNAME)) %>%
-  subset(batter_name == "Eddie Rosario" | batter_name == "Max Kepler") %>%
-  mutate(year = "2019")
-batting <- merge(bat18, bat19, all =TRUE)
-
 batTypes <- batting %>%
   group_by(batter_name, year) %>%
   count(des) %>%
@@ -79,7 +46,10 @@ ui <- fluidPage(
    titlePanel("Twins Batting and Pitching"),
    mainPanel(
       tabsetPanel(
-        tabPanel("Pitching", plotlyOutput(outputId = "pitching1"),
+        tabPanel("Pitching", 
+                 selectInput("select", strong("Pitch Options"), choices = c("Pitch Type" = "pitch_type",
+                    "Result" = "result", "Velocity" = "velocity")),
+                 plotlyOutput(outputId = "pitching1"),
                  p("This first plot is of pitches by Kyle Gibson, Jake Odorizzi, and Jose Berrios. It's hard to find
                    any statistically significant differences between 2018 and 2019 from this. However, there are
                    several interesting observations. One of these being that Jake Odorizzi stopped using a slider in
@@ -97,7 +67,9 @@ ui <- fluidPage(
                  p("This bar chart is a reformating of the batting scatterplot. It shows how Eddie Rosario and Max Kepler
                    divide their hits. Rosario appears to have been much more effective in 2019. He has four times as many
                    home runs this year. This would have a strong impact of the Twins ability to win games.")),
-        tabPanel("About", p("This Shiny app was created to explore how the Minnesota Twins baseball team improved from
+        tabPanel("About", 
+                 p("This Shiny app was created by Joe Johnson, TJ Rogers, and Matt Muller to explore 
+                    how the Minnesota Twins baseball team improved from
                             the first month of the 2018 season to the first month of the 2019 season. Our main goal
                             was to determine what changed with respect to Minnesota's best batters and pitchers."),
                  p("The data was scraped from the MLBAM Gameday data and analyized using the following packages"),
@@ -106,7 +78,7 @@ ui <- fluidPage(
                  p("- doParallel"),
                  p("- stringr"),
                  p("- plotly"),
-                 p("The source code for this Shiny app can be found at: ")))
+                 p("The source code for this Shiny app can be found at: https://github.com/jrjohnson1/MSCS264Final")))
    )
 )
 
@@ -115,11 +87,27 @@ server <- function(input, output) {
    
   
   output$pitching1 <- renderPlotly({
+    if (input$select == "pitch_type") {
     p1 <- ggplot() +
-      geom_point(data=pitches, aes(x=px, y=pz, shape=type, col=pitch_type)) +
+      geom_point(data=pitches, aes(x=px, y=pz, shape=type, col=pitch_type), alpha=0.25) +
       facet_grid(pitcher_name ~ year)+ coord_equal() + 
       geom_path(aes(x, y), data = mlbgameday::kzone)
     ggplotly(p1)
+    }
+    else if (input$select == "result") {
+      p1 <- ggplot() +
+        geom_point(data=pitches, aes(x=px, y=pz, shape=type, col=des), alpha=0.25) +
+        facet_grid(pitcher_name ~ year)+ coord_equal() + 
+        geom_path(aes(x, y), data = mlbgameday::kzone)
+      ggplotly(p1)
+    }
+    else if (input$select == "velocity") {
+      p1 <- ggplot() +
+        geom_point(data=pitches, aes(x=px, y=pz, shape=type, col=start_speed), alpha=0.25) +
+        facet_grid(pitcher_name ~ year)+ coord_equal() + 
+        geom_path(aes(x, y), data = mlbgameday::kzone)
+      ggplotly(p1)
+    }
    })
    
    
